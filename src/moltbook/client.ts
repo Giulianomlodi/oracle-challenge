@@ -62,7 +62,7 @@ export class MoltbookClient {
    */
   async createPost(params: CreatePostParams): Promise<MoltbookPost> {
     const response = await this.client.post('/posts', params);
-    return response.data.data;
+    return response.data.post;
   }
   
   /**
@@ -79,7 +79,7 @@ export class MoltbookClient {
     if (options.limit) params.append('limit', options.limit.toString());
     
     const response = await this.client.get(`/posts?${params.toString()}`);
-    return response.data.data;
+    return response.data.posts || [];
   }
   
   /**
@@ -87,7 +87,7 @@ export class MoltbookClient {
    */
   async getPost(postId: string): Promise<MoltbookPost> {
     const response = await this.client.get(`/posts/${postId}`);
-    return response.data.data;
+    return response.data.post;
   }
   
   /**
@@ -95,7 +95,7 @@ export class MoltbookClient {
    */
   async getComments(postId: string): Promise<MoltbookComment[]> {
     const response = await this.client.get(`/posts/${postId}/comments`);
-    return response.data.data;
+    return response.data.comments || [];
   }
   
   /**
@@ -106,7 +106,7 @@ export class MoltbookClient {
       content: params.content,
       parent_id: params.parent_id,
     });
-    return response.data.data;
+    return response.data.comment;
   }
   
   /**
@@ -115,7 +115,7 @@ export class MoltbookClient {
   async createSubmolt(name: string, description: string): Promise<any> {
     try {
       const response = await this.client.post('/submolts', { name, description });
-      return response.data.data;
+      return response.data.submolt;
     } catch (error: any) {
       if (error.response?.status === 409) {
         // Already exists
@@ -130,7 +130,7 @@ export class MoltbookClient {
    */
   async getSubmolt(name: string): Promise<any> {
     const response = await this.client.get(`/submolts/${name}`);
-    return response.data.data;
+    return response.data.submolt;
   }
   
   /**
