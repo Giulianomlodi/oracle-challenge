@@ -1,10 +1,14 @@
 import config from '../config';
+import { PolymarketClient } from '../polymarket/client';
+import { marketToTopic } from '../polymarket/formatter';
 
 interface Topic {
   title: string;
   description: string;
   category: string;
   deadline: Date;
+  polymarketId?: string;
+  polymarketData?: any;
 }
 
 // Topic templates by category
@@ -116,6 +120,43 @@ export function generateDailyTopics(count: number = 3): Topic[] {
   return selectedCategories.map(category => generateTopic(category));
 }
 
+/**
+ * Generate topics from Polymarket markets
+ */
+export async function generatePolymarketTopics(count: number = 1): Promise<Topic[]> {
+  if (!config.polymarket?.enabled) {
+    console.log('ℹ️ Polymarket integration disabled');
+    return [];
+  }
+
+  try {
+    const polymarket = new PolymarketClient();
+    const markets = await polymarket.getTrendingMarkets({ 
+      limit: count * 3, // Fetch more to filter
+    });
+
+    // Filter for suitable markets
+    const suitableMarkets = polymarket.filterSuitableMarkets(
+      markets, 
+      config.polymarket.minLiquidity
+    );
+
+    if (suitableMarkets.length === 0) {
+      console.warn('⚠️ No suitable Polymarket markets found');
+      return [];
+    }
+
+    // Convert to topics
+    const topics = suitableMarkets.slice(0, count).map(market => marketToTopic(market));
+    
+    console.log(`✅ Generated ${topics.length} topic(s) from Polymarket`);
+    return topics;
+  } catch (error: any) {
+    console.error('❌ Failed to fetch Polymarket topics:', error.message);
+    return [];
+  }
+}
+
 export function formatTopicPost(topic: Topic): { title: string; content: string } {
   return {
     title: `🔮 PREDICTION: ${topic.title}`,
@@ -123,4 +164,6 @@ export function formatTopicPost(topic: Topic): { title: string; content: string 
   };
 }
 
-export default { generateTopic, generateDailyTopics, formatTopicPost };
+export { Topic };
+export default { generateTopic, generateDailyTopics, generatePolymarketTopics, formatTopicPost };
+

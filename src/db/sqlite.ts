@@ -55,6 +55,9 @@ db.exec(`
     deadline DATETIME,
     resolved BOOLEAN DEFAULT FALSE,
     actual_outcome TEXT,
+    polymarket_id TEXT,
+    polymarket_data TEXT,
+    source TEXT DEFAULT 'generated',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     resolved_at DATETIME
   );
@@ -178,18 +181,24 @@ export function createTopic(data: {
   description?: string;
   category?: string;
   deadline?: Date;
+  polymarketId?: string;
+  polymarketData?: any;
+  source?: 'generated' | 'polymarket';
 }): string {
   const id = uuidv4();
   db.prepare(`
-    INSERT INTO topics (id, post_id, title, description, category, deadline)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO topics (id, post_id, title, description, category, deadline, polymarket_id, polymarket_data, source)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     data.postId || null,
     data.title,
     data.description || null,
     data.category || 'other',
-    data.deadline?.toISOString() || null
+    data.deadline?.toISOString() || null,
+    data.polymarketId || null,
+    data.polymarketData ? JSON.stringify(data.polymarketData) : null,
+    data.source || 'generated'
   );
   return id;
 }

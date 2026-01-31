@@ -26,6 +26,14 @@ export const config = {
     maxStreakBonus: 2, // 2x max
   },
   
+  // Polymarket
+  polymarket: {
+    baseUrl: process.env.POLYMARKET_BASE_URL || 'https://gamma-api.polymarket.com',
+    enabled: process.env.POLYMARKET_ENABLED === 'true',
+    topicsPerDay: parseInt(process.env.POLYMARKET_TOPICS_PER_DAY || '1'),
+    minLiquidity: parseInt(process.env.POLYMARKET_MIN_LIQUIDITY || '10000'),
+  },
+  
   // Database
   database: {
     path: process.env.DATABASE_PATH || './data/oracle.db',

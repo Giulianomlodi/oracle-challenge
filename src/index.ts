@@ -3,8 +3,10 @@ import config from './config';
 import MoltbookClient from './moltbook/client';
 import { parsePrediction } from './moltbook/parser';
 import db from './db/sqlite';
-import { generateDailyTopics, formatTopicPost } from './game/predictor';
+import { generateDailyTopics, generatePolymarketTopics, formatTopicPost } from './game/predictor';
+import { formatPolymarketTopicPost } from './polymarket/formatter';
 import { generateLeaderboardText } from './game/scorer';
+import { resolvePolymarketTopics } from './game/resolver';
 import { initBlockchain } from './blockchain/contracts';
 
 console.log(`
@@ -51,29 +53,56 @@ async function initialize() {
  * Post daily prediction topics
  */
 async function postDailyTopics() {
-  console.log(`📝 Generating ${config.game.postsPerDay} daily topics...`);
+  // Calculate how many generated topics to create
+  const polymarketCount = config.polymarket?.enabled ? config.polymarket.topicsPerDay : 0;
+  const generatedCount = Math.max(1, config.game.postsPerDay - polymarketCount);
   
-  const topics = generateDailyTopics(config.game.postsPerDay);
+  console.log(`📝 Generating ${generatedCount} daily topics + ${polymarketCount} from Polymarket...`);
   
-  for (const topic of topics) {
+  // Generate regular topics
+  const generatedTopics = generateDailyTopics(generatedCount);
+  
+  // Generate Polymarket topics
+  let polymarketTopics: any[] = [];
+  if (polymarketCount > 0) {
     try {
-      const { title, content } = formatTopicPost(topic);
+      polymarketTopics = await generatePolymarketTopics(polymarketCount);
+    } catch (error: any) {
+      console.error(`⚠️ Failed to fetch Polymarket topics: ${error.message}`);
+    }
+  }
+  
+  // Combine all topics
+  const allTopics = [...generatedTopics, ...polymarketTopics];
+  
+  for (const topic of allTopics) {
+    try {
+      // Use appropriate formatter based on source
+      const isPolymarket = !!topic.polymarketId;
+      const { title, content } = isPolymarket 
+        ? formatPolymarketTopicPost(topic)
+        : formatTopicPost(topic);
+      
       const post = await moltbook.createPost({
         submolt: config.moltbook.submolt,
         title,
         content,
       });
       
-      // Store in database
+      // Store in database with Polymarket info if applicable
       db.createTopic({
         postId: post.id,
         title: topic.title,
         description: topic.description,
         category: topic.category,
         deadline: topic.deadline,
+        polymarketId: topic.polymarketId,
+        polymarketData: topic.polymarketData,
+        source: isPolymarket ? 'polymarket' : 'generated',
       });
       
-      console.log(`✅ Posted: ${title}`);
+      const sourceLabel = isPolymarket ? '🌐 Polymarket' : '🔮 Generated';
+      console.log(`✅ Posted [${sourceLabel}]: ${title}`);
       
       // Wait between posts to avoid rate limits
       await new Promise(resolve => setTimeout(resolve, 35 * 60 * 1000)); // 35 min between posts
@@ -184,6 +213,14 @@ async function main() {
     checkNewPredictions().catch(console.error);
   });
   
+  // Check Polymarket resolutions every hour
+  if (config.polymarket?.enabled) {
+    cron.schedule('0 * * * *', () => {
+      console.log('⏰ Checking Polymarket resolutions...');
+      resolvePolymarketTopics().catch(console.error);
+    });
+  }
+  
   // Post leaderboard every Sunday at 18:00 UTC
   cron.schedule('0 18 * * 0', () => {
     console.log('⏰ Running weekly leaderboard...');
@@ -193,6 +230,9 @@ async function main() {
   console.log('📅 Scheduled tasks:');
   console.log('   - Daily topics: 9:00 AM UTC');
   console.log(`   - Check predictions: every ${config.game.checkIntervalMinutes} minutes`);
+  if (config.polymarket?.enabled) {
+    console.log('   - Polymarket resolutions: every hour');
+  }
   console.log('   - Weekly leaderboard: Sundays 6:00 PM UTC');
   console.log('\n🤖 Oracle Challenge Bot is running!\n');
   

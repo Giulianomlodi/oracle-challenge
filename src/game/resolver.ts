@@ -1,6 +1,9 @@
 import db from '../db/sqlite';
 import { calculateReward } from './scorer';
 import blockchain from '../blockchain/contracts';
+import config from '../config';
+import { PolymarketClient } from '../polymarket/client';
+import MoltbookClient from '../moltbook/client';
 
 export interface ResolutionResult {
   predictionId: string;
@@ -163,6 +166,65 @@ export function getExpiredTopics(): any[] {
 }
 
 /**
+ * Check and resolve Polymarket-sourced topics
+ */
+export async function resolvePolymarketTopics(): Promise<void> {
+  if (!config.polymarket?.enabled) {
+    return;
+  }
+
+  console.log('🔍 Checking Polymarket resolutions...');
+  
+  const pendingTopics = db.getPendingTopics().filter(
+    (t: any) => t.polymarket_id && t.source === 'polymarket'
+  );
+
+  if (pendingTopics.length === 0) {
+    console.log('ℹ️ No pending Polymarket topics to check');
+    return;
+  }
+
+  const polymarket = new PolymarketClient();
+  const moltbook = new MoltbookClient();
+  
+  for (const topic of pendingTopics) {
+    try {
+      const resolution = await polymarket.getResolution(topic.polymarket_id);
+      
+      if (resolution.resolved && resolution.outcome) {
+        console.log(`✅ Market resolved: ${topic.title} -> ${resolution.outcome}`);
+        
+        // Resolve topic and all predictions
+        const results = await resolveTopic(topic.id, resolution.outcome);
+        
+        // Post resolution announcement to Moltbook
+        try {
+          const announcement = formatResolutionAnnouncement(
+            topic.title,
+            resolution.outcome,
+            results
+          );
+          
+          await moltbook.createPost({
+            submolt: config.moltbook.submolt,
+            title: `🏆 Resolved: ${topic.title}`,
+            content: announcement,
+          });
+          
+          console.log(`📢 Posted resolution for: ${topic.title}`);
+        } catch (postError: any) {
+          console.error(`Failed to post resolution: ${postError.message}`);
+        }
+      } else {
+        console.log(`⏳ Market pending: ${topic.title}`);
+      }
+    } catch (error: any) {
+      console.error(`Error checking resolution for ${topic.id}:`, error.message);
+    }
+  }
+}
+
+/**
  * Format resolution announcement for Moltbook
  */
 export function formatResolutionAnnouncement(
@@ -205,6 +267,8 @@ export function formatResolutionAnnouncement(
 export default {
   resolvePrediction,
   resolveTopic,
+  resolvePolymarketTopics,
   getExpiredTopics,
   formatResolutionAnnouncement,
 };
+
