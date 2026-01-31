@@ -39,7 +39,7 @@
     "solc": "^0.8.20",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
-    "uuid": "^13.0.0"
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
